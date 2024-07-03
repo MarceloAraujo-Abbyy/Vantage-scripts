@@ -12,4 +12,6 @@ Share some Vantage Scripts to be used in customs activities.
 
 - Google Gemini Sample - This code sends the full ocr and ask for translation of the text. You can modify the prompt as you need to get diferents answers
 
+- Calculate Confidence leval - This script calculates the confidence for field, document and transaction, based on suscpicious characters. If a field has 10 positions, and 2 suspicious charecters, it means 0.80 of confidence. 
+
 For any information, please contact me using the email marcelo.araujo@abbyy.com
