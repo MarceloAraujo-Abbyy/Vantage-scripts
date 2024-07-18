@@ -1,0 +1,136 @@
+
+
+####
+#
+# Before run this script Need change Client_id, Cliente_Secret, username, passoword and tenantID
+# If necessary can also change the output file at line 45
+# 
+# To run set the 
+# -------------
+# startDate = 1st day for request data
+# endDate = last day for request data
+# step = how many days in each request (default=2 days)
+# 
+#####
+
+
+# Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+### Get Token
+
+$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+$headers.Add("Content-Type", "application/x-www-form-urlencoded")
+$body = @{grant_type='password'
+scope='openid permissions global.wildcard'
+client_id='XXXXXXXXXXXXXXXXXXXXXXXXXX'
+client_secret='XXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+username='marcelo.araujo@abbyy.com'
+password='XXXXXXXXXXXXXXXXXXXXX'
+}
+
+$response_token = Invoke-RestMethod 'https://vantage-us.abbyy.com/auth2/XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/connect/token' -Method 'POST' -Headers $headers -Body $body
+$token = $response_token.access_token
+
+# Define the start and end dates (adjust as needed)
+$startDate = [datetime]::ParseExact("2024-01-01", "yyyy-MM-dd", $null)
+$endDate = [datetime]::ParseExact("2024-07-19", "yyyy-MM-dd", $null) # Example dates for a larger range
+
+# Define the step (number of days per request)
+$step = 2
+
+# API URL
+$baseUrl = "https://vantage-us.abbyy.com/api/reporting/v1/transaction-steps"
+
+# Output CSV file
+$outputFile = "c:\\temp\\transaction_steps.csv"
+
+# Check if the file already exists, and if so, remove it
+if (Test-Path $outputFile) {
+    Remove-Item $outputFile
+}
+
+# print selected period
+write-output "Informed Period: $startDate to $endDate"
+
+
+# Initialize a variable to track if the header has been added to the CSV file
+$headerAdded = $false
+
+# Loop for each step in the date range
+$currentDate = $startDate
+
+# Start time for the script
+$startTime = Get-Date
+
+while ($currentDate -lt $endDate) {
+
+    $nextDate = $currentDate.AddDays($step)
+
+    # Ensure the end date does not exceed the specified end date
+    if ($nextDate -gt $endDate) {
+        $nextDate = $endDate
+    }
+
+    # Format the dates in the desired format
+    $formattedStartDate = $currentDate.ToString("yyyy-MM-ddTHH:mm:ss")
+    $formattedEndDate = $nextDate.ToString("yyyy-MM-ddTHH:mm:ss")
+
+    # Query parameters
+    $params = @{
+        startDate = $formattedStartDate
+        endDate   = $formattedEndDate
+    }
+
+    write-output "processing period $formattedStartDate to $formattedEndDate"
+
+    # Construct the Header Info
+    $headers1 = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+    $headers1.Add("accept", "*/*")
+    $headers1.Add("Authorization", "Bearer $($token)")
+
+    # Construct the URL with the parameters
+    $url = "$($baseUrl)?startDate=$($params.startDate)&endDate=$($params.endDate)"
+
+    # Make the request
+    try {
+        $response = Invoke-RestMethod -Uri $url -Method GET -Headers $headers1
+    } catch {
+            try {
+                Write-Output "Error making request... trying again...."
+
+            } catch {
+                Write-Output "Error making request for $formattedStartDate to $formattedEndDate : $_"
+                $currentDate = $nextDate
+                continue
+            }
+    }
+
+    # Check if the response contains data
+    if ($response) {
+        # Convert the response to CSV
+        $csvData = $response #| ConvertTo-Csv -NoTypeInformation
+        
+        # Add the header to the CSV file if it hasn't been added yet
+        if (-not $headerAdded) {
+            $csvData | Out-File -FilePath $outputFile
+            $headerAdded = $true
+        } else {
+            # Append the data to the CSV file, skipping the header line
+            $csvDataLines = $csvData -split "`r`n" | Select-Object -Skip 1
+            $csvDataString = $csvDataLines -join "`r`n"
+            $csvDataString | Out-File -Append -FilePath $outputFile
+        }
+    }
+
+    # Move to the next date step
+    $currentDate = $nextDate
+}
+
+Write-Output "Data saved to $outputFile"
+
+# End time for the script
+$endTime = Get-Date
+
+# Calculate the total time taken
+$totalTime = $endTime - $startTime
+Write-Output "Total time taken: $totalTime"
